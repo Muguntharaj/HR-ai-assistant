@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { processAttendanceData, processPersonalData, enrichWithML } from './data';
 import { SHARED_NETWORK_DATA } from './shared_data/repository';
 import { ChatSession, ChatMessage, Employee, AuthUser } from './types';
@@ -18,8 +18,9 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   
-  const [confirmUpload, setConfirmUpload] = useState<{ file: File, category: 'attendance' | 'details' } | null>(null);
+  const [confirmUpload, setConfirmUpload] = useState<{ files: File[], category: 'attendance' | 'details' } | null>(null);
 
+  // Initialize data
   useEffect(() => {
     const savedSessions = localStorage.getItem('hr_ai_sessions_v5');
     if (savedSessions) {
@@ -32,15 +33,21 @@ const App: React.FC = () => {
     if (savedUser) setUser(JSON.parse(savedUser));
 
     const savedEmployees = localStorage.getItem('hr_ai_employees_v8');
+    const savedDeletedIds = localStorage.getItem('hr_ai_deleted_ids_v1');
+    
     let baseEmployees: Employee[] = [];
-    if (savedEmployees) {
-      baseEmployees = JSON.parse(savedEmployees);
-    }
+    let deletedIds: string[] = [];
+
+    if (savedEmployees) baseEmployees = JSON.parse(savedEmployees);
+    if (savedDeletedIds) deletedIds = JSON.parse(savedDeletedIds);
 
     const employeesMap = new Map<string, Employee>();
     baseEmployees.forEach(e => employeesMap.set(e.id, e));
     
+    // Merge shared data only if not explicitly deleted
     SHARED_NETWORK_DATA.forEach(netEmp => {
+      if (deletedIds.includes(netEmp.id)) return;
+
       const existing = employeesMap.get(netEmp.id);
       if (existing) {
         employeesMap.set(netEmp.id, { 
@@ -57,6 +64,7 @@ const App: React.FC = () => {
     setEmployees(enrichWithML(Array.from(employeesMap.values())));
   }, []);
 
+  // Persist State
   useEffect(() => {
     localStorage.setItem('hr_ai_sessions_v5', JSON.stringify(sessions));
   }, [sessions]);
@@ -70,7 +78,7 @@ const App: React.FC = () => {
     else localStorage.removeItem('hr_ai_user');
   }, [user]);
 
-  const handleSyncToCloud = async (currentEmployees: Employee[]) => {
+  const handleSyncToCloud = useCallback(async (currentEmployees: Employee[]) => {
     const updatedRepoCode = `
 import { Employee } from '../types';
 
@@ -82,62 +90,62 @@ export const SHARED_NETWORK_DATA: Employee[] = ${JSON.stringify(currentEmployees
       console.log("Automatic Neural cloud update triggered.");
       setIsDirty(false);
     } catch (err) {
-      console.error("Failed to copy sync code", err);
-      setIsDirty(false);
+      console.warn("Clipboard access restricted. Use 'Sync' button in sidebar.", err);
     }
-  };
+  }, []);
 
-  const executeFileUpload = async (file: File, category: 'attendance' | 'details') => {
+  const executeFileUpload = async (files: File[], category: 'attendance' | 'details') => {
     setIsProcessing(true);
     setConfirmUpload(null);
     try {
-      let finalEmployees: Employee[] = [];
-      if (category === 'details') {
-        const partials = await processPersonalData(file);
-        const updatedMap = new Map<string, Employee>();
-        employees.forEach(e => updatedMap.set(e.id, JSON.parse(JSON.stringify(e))));
-        
-        partials.forEach(p => {
-          if (!p.id) return;
-          let existing = updatedMap.get(p.id);
-          if (!existing && p.name) {
-            existing = Array.from(updatedMap.values()).find(e => e.name.toLowerCase() === p.name!.toLowerCase());
-          }
+      let finalEmployees = [...employees];
 
-          if (existing) {
-            const mergedDetails = { ...(existing.details || {}) };
-            if (p.details) {
-              Object.entries(p.details).forEach(([key, val]) => {
-                const sVal = String(val || '').trim();
-                if (sVal !== '' && sVal.toUpperCase() !== 'N/A' && sVal.toLowerCase() !== 'null') {
-                  (mergedDetails as any)[key] = sVal;
-                }
-              });
+      for (const file of files) {
+        if (category === 'details') {
+          const partials = await processPersonalData(file);
+          const updatedMap = new Map<string, Employee>();
+          finalEmployees.forEach(e => updatedMap.set(e.id, JSON.parse(JSON.stringify(e))));
+          
+          partials.forEach(p => {
+            if (!p.id) return;
+            let existing = updatedMap.get(p.id);
+            if (!existing && p.name) {
+              existing = Array.from(updatedMap.values()).find(e => e.name.toLowerCase() === p.name!.toLowerCase());
             }
 
-            const updatedEmp = { 
-              ...existing, 
-              name: (p.name && p.name !== '' && p.name.toUpperCase() !== 'N/A') ? p.name : existing.name,
-              department: (p.department && p.department !== 'General') ? p.department : (existing.department || 'General'),
-              company: (p.company && p.company !== 'Corporate') ? p.company : (existing.company || 'Corporate'),
-              details: mergedDetails
-            };
-            updatedMap.set(existing.id, updatedEmp);
-          } else {
-            updatedMap.set(p.id, { ...p, monthlyData: {} } as Employee);
-          }
-        });
-        finalEmployees = enrichWithML(Array.from(new Set(updatedMap.values())));
-      } else {
-        finalEmployees = await processAttendanceData(file, employees);
-        finalEmployees = enrichWithML(finalEmployees);
+            if (existing) {
+              const mergedDetails = { ...(existing.details || {}) };
+              if (p.details) {
+                Object.entries(p.details).forEach(([key, val]) => {
+                  const sVal = String(val || '').trim();
+                  if (sVal !== '' && sVal.toUpperCase() !== 'N/A' && sVal.toLowerCase() !== 'null') {
+                    (mergedDetails as any)[key] = sVal;
+                  }
+                });
+              }
+
+              const updatedEmp = { 
+                ...existing, 
+                name: (p.name && p.name !== '' && p.name.toUpperCase() !== 'N/A') ? p.name : existing.name,
+                department: (p.department && p.department !== 'General') ? p.department : (existing.department || 'General'),
+                company: (p.company && p.company !== 'Corporate') ? p.company : (existing.company || 'Corporate'),
+                details: mergedDetails
+              };
+              updatedMap.set(existing.id, updatedEmp);
+            } else {
+              updatedMap.set(p.id, { ...p, monthlyData: {} } as Employee);
+            }
+          });
+          finalEmployees = Array.from(updatedMap.values());
+        } else {
+          finalEmployees = await processAttendanceData(file, finalEmployees);
+        }
       }
       
-      setEmployees(finalEmployees);
+      const enriched = enrichWithML(finalEmployees);
+      setEmployees(enriched);
       setIsDirty(true);
       setActiveTab('dashboard');
-      await handleSyncToCloud(finalEmployees);
-      
     } catch (err) {
       console.error(err);
       alert('Neural sync interrupted. Check Excel headers.');
@@ -148,24 +156,33 @@ export const SHARED_NETWORK_DATA: Employee[] = ${JSON.stringify(currentEmployees
 
   const handleUpdateEmployee = (updatedEmp: Employee) => {
     setEmployees(prev => {
-      const newList = prev.map(e => e.id === updatedEmp.id ? updatedEmp : e);
-      // If it's a new employee not in list, add it
-      if (!newList.find(e => e.id === updatedEmp.id)) newList.push(updatedEmp);
-      const enriched = enrichWithML(newList);
-      handleSyncToCloud(enriched);
-      setIsDirty(true);
-      return enriched;
+      const exists = prev.some(e => e.id === updatedEmp.id);
+      let newList;
+      if (exists) {
+        newList = prev.map(e => e.id === updatedEmp.id ? updatedEmp : e);
+      } else {
+        newList = [...prev, updatedEmp];
+      }
+      return enrichWithML(newList);
     });
+    setIsDirty(true);
   };
 
   const handleDeleteEmployee = (id: string) => {
     setEmployees(prev => {
       const filtered = prev.filter(e => e.id !== id);
-      const enriched = enrichWithML(filtered);
-      handleSyncToCloud(enriched);
-      setIsDirty(true);
-      return enriched;
+      return enrichWithML(filtered);
     });
+    
+    // Add to deleted registry to prevent shared repo from resurrecting it
+    const savedDeletedIds = localStorage.getItem('hr_ai_deleted_ids_v1');
+    const deletedIds: string[] = savedDeletedIds ? JSON.parse(savedDeletedIds) : [];
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      localStorage.setItem('hr_ai_deleted_ids_v1', JSON.stringify(deletedIds));
+    }
+
+    setIsDirty(true);
   };
 
   const handleSendMessage = (content: string, response: string, chart?: any) => {
@@ -220,10 +237,14 @@ export const SHARED_NETWORK_DATA: Employee[] = ${JSON.stringify(currentEmployees
               <div className="flex flex-col items-center text-center gap-6">
                  <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 shadow-inner">
                    <FileCheck size={48} className="text-indigo-600 mb-4 mx-auto"/>
-                   <p className="text-sm font-black text-slate-900 truncate max-w-xs">{confirmUpload.file.name}</p>
+                   <div className="max-h-32 overflow-y-auto px-4 w-full">
+                     {confirmUpload.files.map(f => (
+                       <p key={f.name} className="text-sm font-black text-slate-900 truncate mb-1">{f.name}</p>
+                     ))}
+                   </div>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{confirmUpload.category === 'attendance' ? 'Attendance Logs' : 'Personnel Registry'}</p>
                  </div>
-                 <p className="text-slate-500 text-sm font-medium leading-relaxed">System has detected a new data stream. Confirming will bind these records to the master neural index. This action is logged.</p>
+                 <p className="text-slate-500 text-sm font-medium leading-relaxed">System has detected {confirmUpload.files.length} data stream(s). Confirming will bind these records to the master neural index.</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <button 
@@ -233,7 +254,7 @@ export const SHARED_NETWORK_DATA: Employee[] = ${JSON.stringify(currentEmployees
                   Cancel
                 </button>
                 <button 
-                  onClick={() => executeFileUpload(confirmUpload.file, confirmUpload.category)} 
+                  onClick={() => executeFileUpload(confirmUpload.files, confirmUpload.category)} 
                   className="py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
                 >
                   <Database size={16}/>
@@ -251,7 +272,7 @@ export const SHARED_NETWORK_DATA: Employee[] = ${JSON.stringify(currentEmployees
         onSelectSession={setActiveSessionId} 
         onNewChat={() => { setActiveSessionId(null); setActiveTab('chat'); }} 
         onLogout={() => setUser(null)} 
-        onFileUpload={(file, cat) => setConfirmUpload({ file, category: cat })} 
+        onFileUpload={(files, cat) => setConfirmUpload({ files, category: cat })} 
         onSync={() => handleSyncToCloud(employees)}
         isDirty={isDirty}
         activeTab={activeTab} 

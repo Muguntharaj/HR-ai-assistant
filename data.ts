@@ -90,7 +90,7 @@ const findValueByNormalizedKey = (row: any, ...keys: string[]) => {
 
 const extractId = (row: any): string | null => {
   const rawId = findValueByNormalizedKey(row, 
-    'Emp Code', 'Employee Code', 'EmpCode', 'CardNo', 'Enroll ID', 'ID'
+    'Emp Code', 'Employee Code', 'EmpCode', 'CardNo', 'Enroll ID', 'ID', 'SNo', 'Serial No'
   );
   if (rawId === null || rawId === undefined || rawId === '') return null;
   return normalizeId(rawId);
@@ -187,39 +187,42 @@ export const processPersonalData = async (file: File): Promise<Partial<Employee>
         const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(sheet) as any[];
-        const employees = json.map(row => {
+        
+        const results = json.map(row => {
           const empId = extractId(row);
           if (!empId) return null;
           
-          const designationVal = String(findValueByNormalizedKey(row, 'Designation', 'Desig', 'Designatio Grade', 'Grade') || '').trim();
-          // Explicit requirement: Consider Designation as Department
-          const departmentVal = designationVal || String(findValueByNormalizedKey(row, 'Dep', 'Dept', 'Department') || 'General').trim();
+          const designationVal = String(findValueByNormalizedKey(row, 'Designation', 'Desig', 'Designatio Grade', 'Grade', 'Role') || '').trim();
+          const departmentVal = String(findValueByNormalizedKey(row, 'Dep', 'Dept', 'Department', 'Division') || 'General').trim();
+
+          const details: EmployeePersonalDetails = {
+            fatherName: formatExcelValue(findValueByNormalizedKey(row, 'Father Name', 'Father N', 'FatherName', 'Parents')),
+            designation: designationVal,
+            dob: formatExcelValue(findValueByNormalizedKey(row, 'D.O.B (DD/MM/YY)', 'DOB', 'Date of Birth', 'Birth Date')),
+            doj: formatExcelValue(findValueByNormalizedKey(row, 'D.O.J (DD/MM/YY)', 'DOJ', 'Date of Joining', 'Joining Date')),
+            activeStatus: (String(findValueByNormalizedKey(row, 'Active / Inactive', 'Active / Inac', 'Status', 'Employment Status') || '').toLowerCase().includes('active') ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
+            gender: String(findValueByNormalizedKey(row, 'Gender', 'Gen', 'Sex') || '').trim(),
+            maritalStatus: String(findValueByNormalizedKey(row, 'Marital status', 'Marital Status', 'Marital') || '').trim(),
+            address: String(findValueByNormalizedKey(row, 'Address', 'Add', 'Location') || '').trim(),
+            contactNumber: formatExcelValue(findValueByNormalizedKey(row, 'Contact Number', 'Phone', 'Mobile', 'Cell')),
+            emergencyContact: formatExcelValue(findValueByNormalizedKey(row, 'Emergency contact number', 'Emergency No', 'SOS Number')),
+            emergencyContactPerson: String(findValueByNormalizedKey(row, 'Emergency contact person', 'Emergency Person', 'Relative Name') || '').trim(),
+            bloodGroup: String(findValueByNormalizedKey(row, 'Blood Group', 'Blood', 'BG') || '').trim(),
+            aadhar: formatExcelValue(findValueByNormalizedKey(row, 'Aadhar Card Number', 'Aadhar', 'UID', 'Adhar')),
+            pan: formatExcelValue(findValueByNormalizedKey(row, 'Pan Card Number', 'PAN', 'PAN NO')),
+            mailId: String(findValueByNormalizedKey(row, 'Mail - Id', 'Email', 'Mail ID', 'Mail-Id', 'Gmail') || '').trim(),
+          };
 
           return {
             id: empId,
-            name: String(findValueByNormalizedKey(row, 'Emp Name', 'Employee Name', 'Name') || '').trim(),
+            name: String(findValueByNormalizedKey(row, 'Emp Name', 'Employee Name', 'Name', 'FullName') || '').trim(),
             department: departmentVal,
-            company: String(findValueByNormalizedKey(row, 'Company', 'Org', 'Organization') || 'Copes Tech').trim(),
-            details: {
-              fatherName: formatExcelValue(findValueByNormalizedKey(row, 'Father Name', 'Father N', 'FatherName')),
-              designation: designationVal,
-              dob: formatExcelValue(findValueByNormalizedKey(row, 'D.O.B (DD/MM/YY)', 'DOB', 'Date of Birth')),
-              doj: formatExcelValue(findValueByNormalizedKey(row, 'D.O.J (DD/MM/YY)', 'DOJ', 'Date of Joining')),
-              activeStatus: (String(findValueByNormalizedKey(row, 'Active / Inactive', 'Active / Inac', 'Status') || '').toLowerCase().includes('active') ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
-              gender: String(findValueByNormalizedKey(row, 'Gender', 'Gen', 'Sex') || '').trim(),
-              maritalStatus: String(findValueByNormalizedKey(row, 'Marital status', 'Marital Status', 'Marital') || '').trim(),
-              address: String(findValueByNormalizedKey(row, 'Address', 'Add') || '').trim(),
-              contactNumber: formatExcelValue(findValueByNormalizedKey(row, 'Contact Number', 'Phone', 'Mobile')),
-              emergencyContact: formatExcelValue(findValueByNormalizedKey(row, 'Emergency contact number', 'Emergency No')),
-              emergencyContactPerson: String(findValueByNormalizedKey(row, 'Emergency contact person', 'Emergency Person') || '').trim(),
-              bloodGroup: String(findValueByNormalizedKey(row, 'Blood Group', 'Blood') || '').trim(),
-              aadhar: formatExcelValue(findValueByNormalizedKey(row, 'Aadhar Card Number', 'Aadhar', 'UID')),
-              pan: formatExcelValue(findValueByNormalizedKey(row, 'Pan Card Number', 'PAN', 'PAN NO')),
-              mailId: String(findValueByNormalizedKey(row, 'Mail - Id', 'Email', 'Mail ID', 'Mail-Id') || '').trim(),
-            } as EmployeePersonalDetails
+            company: String(findValueByNormalizedKey(row, 'Company', 'Org', 'Organization', 'Firm') || 'Copes Tech').trim(),
+            details
           };
         }).filter(Boolean);
-        resolve(employees as any);
+        
+        resolve(results as Partial<Employee>[]);
       } catch (err) { reject(err); }
     };
     reader.readAsArrayBuffer(file);

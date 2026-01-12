@@ -277,8 +277,8 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, setEmployees, currentU
     setExpandedEmployeeId(expandedEmployeeId === id ? null : id);
   };
 
-  const handleEdit = (e: React.MouseEvent, emp: Employee) => {
-    e.stopPropagation();
+  const handleEdit = (e: React.MouseEvent | React.FocusEvent, emp: Employee) => {
+    if ('stopPropagation' in e) e.stopPropagation();
     setEditingEmployee(JSON.parse(JSON.stringify(emp))); 
     setEditorTab('details');
   };
@@ -287,17 +287,23 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, setEmployees, currentU
     if (editingEmployee && onUpdateEmployee) {
       onUpdateEmployee(editingEmployee);
       setEditingEmployee(null);
+      // If we were editing the selected employee, update that view too
+      if (selectedEmployee?.id === editingEmployee.id) {
+        setSelectedEmployee(editingEmployee);
+      }
     }
   };
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDelete = (e: React.MouseEvent | React.FocusEvent, id: string) => {
+    if ('stopPropagation' in e) e.stopPropagation();
     setConfirmDeleteId(id);
   };
 
   const confirmDelete = () => {
     if (confirmDeleteId && onDeleteEmployee) {
       onDeleteEmployee(confirmDeleteId);
+      if (selectedEmployee?.id === confirmDeleteId) setSelectedEmployee(null);
+      if (expandedEmployeeId === confirmDeleteId) setExpandedEmployeeId(null);
       setConfirmDeleteId(null);
     }
   };
@@ -618,6 +624,416 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, setEmployees, currentU
                     )}
                   </div>
                </div>
+            </div>
+          </div>
+        )}
+
+        {selectedEmployee && (
+          <div className="fixed inset-0 z-[1200] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-4 md:p-12 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-6xl h-full max-h-[92vh] rounded-[3rem] md:rounded-[4rem] shadow-4xl overflow-hidden flex flex-col border border-white/20">
+              <div className="p-8 md:p-12 bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-8 shrink-0 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-20 opacity-10 rotate-12 transform scale-150"><Fingerprint size={120}/></div>
+                <div className="flex items-center gap-8 relative z-10">
+                  <div className="h-24 w-24 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-4xl font-black shadow-2xl">{selectedEmployee.name.charAt(0)}</div>
+                  <div>
+                    <h3 className="text-4xl font-black tracking-tighter mb-2">{selectedEmployee.name}</h3>
+                    <div className="flex flex-wrap gap-4">
+                      <span className="px-4 py-1.5 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-400">{selectedEmployee.id}</span>
+                      <span className="px-4 py-1.5 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400">{selectedEmployee.department}</span>
+                      <span className="px-4 py-1.5 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest text-emerald-400">{selectedEmployee.details?.designation || 'Specialist'}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 relative z-10">
+                   {currentUser.role !== 'EMPLOYEE' && (
+                     <>
+                        <button 
+                          onClick={(e) => handleEdit(e, selectedEmployee)}
+                          className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+                        >
+                          <Edit3 size={16}/> Edit
+                        </button>
+                        <button 
+                          onClick={(e) => handleDelete(e, selectedEmployee.id)}
+                          className="px-6 py-3 bg-rose-500/10 hover:bg-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-rose-500/20"
+                        >
+                          <Trash2 size={16}/> Delete
+                        </button>
+                     </>
+                   )}
+                   <button onClick={() => setSelectedEmployee(null)} className="p-4 bg-white/10 hover:bg-rose-500 rounded-full transition-all active:scale-90"><X size={32}/></button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 md:p-12 space-y-12 custom-scrollbar">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-1 space-y-6">
+                    <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Neural Metrics</p>
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-600">Compliance Score</span>
+                          <span className="text-2xl font-black text-indigo-600">{selectedEmployee.complianceScore || 100}%</span>
+                        </div>
+                        <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-600 transition-all duration-1000" style={{ width: `${selectedEmployee.complianceScore || 100}%` }}></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 pt-4">
+                          <div className="text-center p-4 bg-white rounded-2xl border border-slate-100">
+                             <p className="text-[8px] font-black text-emerald-500 uppercase mb-1">Present</p>
+                             <p className="text-xl font-black text-slate-900">{getStats(selectedEmployee, currentViewMonth).present}</p>
+                          </div>
+                          <div className="text-center p-4 bg-white rounded-2xl border border-slate-100">
+                             <p className="text-[8px] font-black text-rose-500 uppercase mb-1">Absent</p>
+                             <p className="text-xl font-black text-slate-900">{getStats(selectedEmployee, currentViewMonth).absent}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-8 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl">
+                      <TrendingUp size={24} className="mb-4 opacity-50"/>
+                      <h4 className="text-lg font-black tracking-tight mb-2">Pattern Prediction</h4>
+                      <p className="text-xs font-medium text-indigo-100 leading-relaxed">System predicts high stability for the next 14 days based on current temporal alignment.</p>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-2">
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-3">
+                        <CalendarDays className="text-indigo-600" size={24}/>
+                        <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">Temporal Grid: {currentViewMonth}</h4>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-3">
+                      {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
+                        <div key={d} className="text-[10px] font-black text-slate-400 text-center py-2">{d}</div>
+                      ))}
+                      {renderCalendarGrid(selectedEmployee, currentViewMonth)}
+                    </div>
+                    <div className="mt-8 flex gap-6">
+                       <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-[#10b981]"></span> Present</div>
+                       <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-[#f43f5e]"></span> Absent</div>
+                       <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-[#fbbf24]"></span> Week Off</div>
+                       <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-rose-600"></span> Anomaly</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingEmployee && (
+          <div className="fixed inset-0 z-[1300] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-8 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-5xl h-full max-h-[90vh] rounded-[3rem] md:rounded-[4rem] shadow-4xl overflow-hidden flex flex-col border border-white/20">
+              <div className="p-8 md:p-10 bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-6 shrink-0">
+                <div className="flex items-center gap-6">
+                  <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl"><Edit3 size={24}/></div>
+                  <div>
+                    <h3 className="text-2xl font-black tracking-tight uppercase">Neural Editor</h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Personnel Override Activated</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button onClick={() => setEditingEmployee(null)} className="px-6 py-3 bg-white/10 hover:bg-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all">Cancel</button>
+                  <button onClick={handleSaveEdit} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-indigo-500/20 flex items-center gap-2"><Save size={16}/> Commit Edits</button>
+                </div>
+              </div>
+
+              <div className="flex border-b border-slate-100 shrink-0">
+                <button 
+                  onClick={() => setEditorTab('details')}
+                  className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${editorTab === 'details' ? 'text-indigo-600 bg-indigo-50/50 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Identity Configuration
+                </button>
+                <button 
+                  onClick={() => setEditorTab('logs')}
+                  className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${editorTab === 'logs' ? 'text-indigo-600 bg-indigo-50/50 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Temporal Logs ({currentViewMonth})
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 md:p-12 space-y-12 custom-scrollbar">
+                {editorTab === 'details' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Display Name</label>
+                      <input 
+                        type="text" 
+                        value={editingEmployee.name} 
+                        onChange={(e) => setEditingEmployee({...editingEmployee, name: e.target.value})}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Neural ID (Primary Key)</label>
+                      <input 
+                        type="text" 
+                        value={editingEmployee.id} 
+                        readOnly
+                        className="w-full px-6 py-4 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-bold text-slate-400 cursor-not-allowed"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Designation (Dept.)</label>
+                      <input 
+                        type="text" 
+                        value={editingEmployee.department} 
+                        onChange={(e) => setEditingEmployee({...editingEmployee, department: e.target.value, details: { ...editingEmployee.details, designation: e.target.value }})}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Father Name</label>
+                      <input 
+                        type="text" 
+                        value={editingEmployee.details?.fatherName || ''} 
+                        onChange={(e) => setEditingEmployee({...editingEmployee, details: {...editingEmployee.details, fatherName: e.target.value}})}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Mobile Contact</label>
+                      <input 
+                        type="text" 
+                        value={editingEmployee.details?.contactNumber || ''} 
+                        onChange={(e) => setEditingEmployee({...editingEmployee, details: {...editingEmployee.details, contactNumber: e.target.value}})}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">PAN Registry</label>
+                      <input 
+                        type="text" 
+                        value={editingEmployee.details?.pan || ''} 
+                        onChange={(e) => setEditingEmployee({...editingEmployee, details: {...editingEmployee.details, pan: e.target.value}})}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                    <table className="w-full">
+                      <thead className="bg-slate-50 border-b">
+                        <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                          <th className="p-6 text-left">Day</th>
+                          <th className="p-6 text-left">Log Status</th>
+                          <th className="p-6 text-left">Shift</th>
+                          <th className="p-6 text-left">In-Time</th>
+                          <th className="p-6 text-left">Out-Time</th>
+                          <th className="p-6 text-left">Total Dur.</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y text-sm font-bold text-slate-700">
+                        {Array.from({length: 31}, (_, i) => {
+                          const day = i + 1;
+                          const record = editingEmployee.monthlyData[currentViewMonth]?.find(r => r.day === day) || { day, status: 'Absent', shift: 'GS', totalDuration: '00:00', cycles: [] };
+                          return (
+                            <tr key={day} className="hover:bg-slate-50 transition-all">
+                              <td className="p-4 pl-6 text-slate-400">{day}</td>
+                              <td className="p-4">
+                                <select 
+                                  value={record.status} 
+                                  onChange={(e) => updateLogRecord(day, 'status', e.target.value)}
+                                  className="bg-transparent border-none outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2"
+                                >
+                                  <option>Present</option>
+                                  <option>Absent</option>
+                                  <option>WeeklyOff</option>
+                                  <option>Weekoff Present</option>
+                                </select>
+                              </td>
+                              <td className="p-4">
+                                <input 
+                                  type="text" 
+                                  value={record.shift} 
+                                  onChange={(e) => updateLogRecord(day, 'shift', e.target.value)}
+                                  className="w-12 bg-transparent border-none outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1"
+                                />
+                              </td>
+                              <td className="p-4">
+                                <input 
+                                  type="text" 
+                                  placeholder="00:00"
+                                  value={record.cycles?.[0]?.in || ''} 
+                                  onChange={(e) => {
+                                    const cycles = [...(record.cycles || [])];
+                                    if(cycles.length === 0) cycles.push({in: e.target.value, out: '', durationMinutes: 0});
+                                    else cycles[0].in = e.target.value;
+                                    updateLogRecord(day, 'cycles', cycles);
+                                  }}
+                                  className="w-16 bg-transparent border-none outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1 font-mono"
+                                />
+                              </td>
+                              <td className="p-4">
+                                <input 
+                                  type="text" 
+                                  placeholder="00:00"
+                                  value={record.cycles?.[0]?.out || ''} 
+                                  onChange={(e) => {
+                                    const cycles = [...(record.cycles || [])];
+                                    if(cycles.length === 0) cycles.push({in: '', out: e.target.value, durationMinutes: 0});
+                                    else cycles[0].out = e.target.value;
+                                    updateLogRecord(day, 'cycles', cycles);
+                                  }}
+                                  className="w-16 bg-transparent border-none outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1 font-mono"
+                                />
+                              </td>
+                              <td className="p-4">
+                                <input 
+                                  type="text" 
+                                  placeholder="00:00"
+                                  value={record.totalDuration || ''} 
+                                  onChange={(e) => updateLogRecord(day, 'totalDuration', e.target.value)}
+                                  className="w-16 bg-transparent border-none outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1 font-mono text-indigo-600"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmDeleteId && (
+          <div className="fixed inset-0 z-[1400] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in scale-95 duration-300">
+            <div className="bg-white w-full max-w-md rounded-[3rem] p-12 text-center shadow-4xl border border-rose-100">
+              <div className="h-20 w-20 bg-rose-100 text-rose-600 rounded-3xl mx-auto flex items-center justify-center mb-8 shadow-xl">
+                <ShieldAlert size={40}/>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Security Breach Warning</h3>
+              <p className="text-slate-500 text-sm font-medium leading-relaxed mb-10">You are about to purge this personnel identity from the neural database. This action is irreversible.</p>
+              <div className="flex gap-4">
+                <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">Abort</button>
+                <button onClick={confirmDelete} className="flex-1 py-5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-rose-200">Confirm Purge</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showNotifications && (
+          <div className="fixed top-24 md:top-36 right-4 md:right-12 w-[calc(100vw-32px)] md:w-96 bg-white rounded-[2.5rem] shadow-4xl border border-slate-100 z-[400] animate-in slide-in-from-right-4">
+            <div className="p-8 bg-slate-900 text-white flex justify-between items-center rounded-t-[2.5rem]">
+              <h5 className="font-black uppercase text-[10px] tracking-widest">Neural Breaches</h5>
+              <div className="flex gap-4">
+                {currentUser.role !== 'EMPLOYEE' && (
+                  <button 
+                    onClick={handleMarkAllRead} 
+                    title="Resolve All Discrepancies"
+                    className="p-2 hover:bg-white/10 rounded-lg transition-all text-emerald-400 flex items-center gap-1 active:scale-90"
+                  >
+                    <CheckCheck size={16}/>
+                  </button>
+                )}
+                <button onClick={() => setShowNotifications(false)} className="p-2 hover:bg-white/10 rounded-lg transition-all"><X size={16}/></button>
+              </div>
+            </div>
+            <div className="max-h-[500px] overflow-y-auto p-4 space-y-4">
+              {notifications.length === 0 && (
+                <div className="text-center py-20 flex flex-col items-center gap-6">
+                   <div className="p-6 bg-emerald-50 rounded-full text-emerald-500">
+                     <CheckCircle size={48} />
+                   </div>
+                   <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">Temporal Registry Clean.</p>
+                </div>
+              )}
+              {notifications.map((n) => (
+                <div key={n.key} className="p-6 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col gap-4 group">
+                  <div className="flex items-start gap-4">
+                    <div className="h-10 w-10 bg-rose-200 text-rose-700 flex items-center justify-center rounded-xl shrink-0 font-black">{n.emp.name?.charAt(0) || '?'}</div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-black text-slate-900 truncate uppercase tracking-tight">{n.emp.name || n.emp.id}</p>
+                      <p className="text-[10px] text-rose-600 font-bold uppercase mt-1">Imperfect Cycle: {n.record.date}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => handleMarkRead(n.key, n.emp.id)} className="w-full py-3 bg-white border border-rose-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm">Mark as Resolved</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {selectedDayDetail && (
+          <div className="fixed inset-0 z-[1500] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-4xl rounded-[3rem] md:rounded-[4rem] shadow-4xl overflow-hidden flex flex-col border border-white/20">
+              <div className="p-8 md:p-12 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-6">
+                   <div className="h-16 w-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black shadow-xl">{selectedDayDetail.emp.name.charAt(0)}</div>
+                   <div>
+                    <h3 className="text-3xl md:text-4xl font-black tracking-tighter mb-2">{selectedDayDetail.emp.name}</h3>
+                    <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] text-indigo-400">{selectedDayDetail.record.date} • {selectedDayDetail.record.status}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedDayDetail(null)} className="p-4 md:p-6 bg-white/10 rounded-full hover:bg-rose-500 transition-all active:scale-90"><X size={32}/></button>
+              </div>
+              <div className="p-8 md:p-12 space-y-8 md:space-y-12 overflow-y-auto custom-scrollbar">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                  <div className="bg-emerald-50 p-6 md:p-10 rounded-[2.5rem] border border-emerald-100 flex items-center gap-6 md:gap-8 shadow-sm">
+                    <div className="p-4 bg-emerald-100 rounded-2xl text-emerald-600"><Clock size={32}/></div>
+                    <div>
+                      <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Total Stayed In</p>
+                      <p className="text-3xl md:text-4xl font-black text-slate-900">{formatMins(selectedDayDetail.record.totalStayedInMinutes)}</p>
+                    </div>
+                  </div>
+                  <div className="bg-rose-50 p-6 md:p-10 rounded-[2.5rem] border border-rose-100 flex items-center gap-6 md:gap-8 shadow-sm">
+                    <div className="p-4 bg-rose-100 rounded-2xl text-rose-600"><AlertCircle size={32}/></div>
+                    <div>
+                      <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-rose-600 mb-1">Total Break Time</p>
+                      <p className="text-3xl md:text-4xl font-black text-slate-900">{formatMins(selectedDayDetail.record.totalBreakMinutes)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                   <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity"><Activity size={64}/></div>
+                   <div className="relative z-10">
+                     <p className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] mb-4">Neural Punch Stream (Raw Logs)</p>
+                     <p className="font-mono text-indigo-400 text-lg md:text-xl leading-relaxed bg-black/30 p-4 rounded-xl border border-white/5">
+                        {selectedDayDetail.record.punchRecRaw || 'NO RAW LOG DATA RECORDED'}
+                     </p>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] ml-2">Validated Punch Intervals</p>
+                  {selectedDayDetail.record.cycles.length === 0 ? (
+                    <div className="py-12 text-center bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No valid punch intervals detected for this temporal node.</p>
+                    </div>
+                  ) : (
+                    selectedDayDetail.record.cycles.map((cycle, i) => (
+                      <div key={i} className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-xl flex items-center justify-between group hover:border-indigo-200 transition-all">
+                        <div className="flex gap-12 md:gap-20">
+                          <div className="text-center group-hover:scale-110 transition-transform">
+                            <LogIn size={20} className="text-emerald-500 mb-2 mx-auto"/>
+                            <span className="text-xl md:text-2xl font-black text-slate-800">{cycle.in}</span>
+                            <p className="text-[8px] font-black text-slate-400 uppercase mt-1">Check In</p>
+                          </div>
+                          <div className="text-center group-hover:scale-110 transition-transform">
+                            <LogOut size={20} className="text-rose-500 mb-2 mx-auto"/>
+                            <span className="text-xl md:text-2xl font-black text-slate-800">{cycle.out || '--:--'}</span>
+                            <p className="text-[8px] font-black text-slate-400 uppercase mt-1">Check Out</p>
+                          </div>
+                        </div>
+                        <div className="text-right px-8 py-4 bg-indigo-50 rounded-3xl border border-indigo-100/50 shadow-inner group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                          <p className="text-[9px] font-black uppercase text-indigo-400 tracking-widest mb-1 group-hover:text-white/60">Duration</p>
+                          <p className="text-2xl md:text-3xl font-black text-indigo-600 group-hover:text-white">{formatMins(cycle.durationMinutes)}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}

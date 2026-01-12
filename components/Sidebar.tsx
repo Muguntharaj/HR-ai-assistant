@@ -13,7 +13,7 @@ interface SidebarProps {
   onSelectSession: (id: string) => void;
   onNewChat: () => void;
   onLogout: () => void;
-  onFileUpload: (file: File, category: 'attendance' | 'details') => void;
+  onFileUpload: (files: File[], category: 'attendance' | 'details') => void;
   onSync: () => void;
   isDirty: boolean;
   activeTab: 'chat' | 'dashboard';
@@ -48,9 +48,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onFileUpload(file, uploadCategory);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      onFileUpload(Array.from(files), uploadCategory);
       e.target.value = ''; 
     }
   };
@@ -170,7 +170,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <FileSpreadsheet size={18} className="text-indigo-400" />
                   <div className="text-left">
                     <p className="text-[11px] font-black text-slate-200 uppercase truncate">Attendance Log</p>
-                    <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Select Excel</p>
+                    <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Select Excel(s)</p>
                   </div>
                 </button>
                 <button
@@ -180,7 +180,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <FolderOpen size={18} className="text-emerald-400" />
                   <div className="text-left">
                     <p className="text-[11px] font-black text-slate-200 uppercase truncate">Personnel Data</p>
-                    <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Select Excel</p>
+                    <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Select Excel(s)</p>
                   </div>
                 </button>
                 
@@ -245,6 +245,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           type="file" 
           ref={fileInputRef} 
           className="hidden" 
+          multiple
           accept=".xlsx,.xls,.csv" 
           onChange={handleFileChange}
         />
